@@ -1,0 +1,26 @@
+{
+  "name": "risk-map-server",
+  "version": "1.0.0",
+  "description": "Node based server for risk-map",
+  "main": "app.js",
+  "dependencies": {
+    "express": "^4.15.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "make test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stl-florida/risk-map-server.git"
+  },
+  "keywords": [
+    "npm"
+  ],
+  "author": "Mayank Ojha",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/stl-florida/risk-map-server/issues"
+  },
+  "homepage": "https://github.com/stl-florida/risk-map-server#readme"
+}
