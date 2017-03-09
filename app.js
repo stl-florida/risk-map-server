@@ -18,9 +18,9 @@ const port = process.env.EX_PORT;
 app.use(cors()); //TODO: use cors_options
 app.use(bodyParser.json());
 
-app.post('/point', //TODO: use single end-point with parameters (/:type) for different queries
+app.post('/point/:type', //TODO: use single end-point with parameters (/:type) for different queries
   validate({
-    //params: {},
+    params: {type: Joi.string().valid('zone', 'elev')},
     body: Joi.object().keys({
       lat: Joi.number().min(-90).max(90).required(),
       long: Joi.number().min(-180).max(180).required()
@@ -28,6 +28,12 @@ app.post('/point', //TODO: use single end-point with parameters (/:type) for dif
   }), (req, res) => {
   console.log("Received put request");
   var wkt_point = "POINT(" + req.body.long + " " + req.body.lat + ")";
+  var query_string;
+  if (req.params.type === 'zone') {
+    query_string = "SELECT fld_zone FROM gis_layers.flood_hazard_zones WHERE ST_Within(ST_GeomFromText('" + wkt_point + "', 4326), geom); SELECT land_use FROM gis_layers.future_landuse WHERE ST_Within(ST_GeomFromText('" + wkt_point + "', 4326), geom)";
+  } else if (req.params.type === 'elev') {
+    query_string = "SELECT ST_Value(rast, ST_GeomFromText('" + wkt_point + "', 4326)) as elev FROM gis_layers.broward_dem_north WHERE ST_Value(rast, ST_GeomFromText('" + wkt_point + "', 4326)) >= 0";
+  }
   pg.connect(process.env.PG_CON, (err, client, done) => {
     if (err) {
       console.log("database err: " + err);
@@ -35,7 +41,7 @@ app.post('/point', //TODO: use single end-point with parameters (/:type) for dif
       callback(new Error('Database connection error'));
       return;
     }
-    var query = client.query("SELECT fld_zone FROM gis_layers.flood_hazard_zones WHERE ST_Within(ST_GeomFromText('" + wkt_point + "', 4326), geom); SELECT land_use FROM gis_layers.future_landuse WHERE ST_Within(ST_GeomFromText('" + wkt_point + "', 4326), geom)");
+    var query = client.query(query_string);
     query.on('row', (row, result) => {
       result.addRow(row);
     });
