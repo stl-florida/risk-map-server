@@ -4,6 +4,7 @@ const pg = require('pg');
 const Joi = require('joi');
 const validate = require('celebrate');
 const bodyParser = require('body-parser');
+const dbgeo = require('dbgeo');
 
 require('dotenv').config({silent:true});
 
@@ -18,7 +19,8 @@ const port = process.env.EX_PORT;
 app.use(cors()); //TODO: use cors_options
 app.use(bodyParser.json());
 
-app.post('/point/:type', //TODO: use single end-point with parameters (/:type) for different queries
+/*
+app.post('/point/:type',
   validate({
     params: {type: Joi.string().valid('zone', 'elev')},
     body: Joi.object().keys({
@@ -26,7 +28,7 @@ app.post('/point/:type', //TODO: use single end-point with parameters (/:type) f
       long: Joi.number().min(-180).max(180).required()
     })
   }), (req, res) => {
-  console.log("Received put request");
+  console.log("Received point query");
   var wkt_point = "POINT(" + req.body.long + " " + req.body.lat + ")";
   var query_string;
   if (req.params.type === 'zone') {
@@ -45,9 +47,93 @@ app.post('/point/:type', //TODO: use single end-point with parameters (/:type) f
     query.on('row', (row, result) => {
       result.addRow(row);
     });
-    query.on('end', (result) => {
+    query.on('end', result => {
       var response = JSON.stringify(result.rows);
       res.send(response);
+    });
+  });
+});
+*/
+
+app.post('/area/:settings',
+  validate({
+    params: {settings: Joi.string().valid('age', 'set2')},
+    body: Joi.object().keys({
+      coords: Joi.string()
+    })
+    // get poly_coords array, validate as lat, lng number, then parse into LINESTRING
+  }), (req, res) => {
+  console.log("Received area query");
+  var query_string;
+  if (req.params.settings === 'age') {
+    query_string = "SELECT * FROM gis_layers.parcels_matched WHERE ST_Within(geom, ST_MakePolygon(ST_GeomFromText('" + req.body.coords + "', 4326)));";
+  }
+  pg.connect(process.env.PG_CON, (err, client, done) => {
+    if (err) {
+      console.log("database err: " + err);
+      done();
+      callback(new Error('Database connection error'));
+      return;
+    }
+    var query = client.query(query_string);
+    query.on('row', (row, result) => {
+      result.addRow(row);
+    });
+    query.on('end', result => {
+      var geom_data = result.rows;
+      console.log('Parsing into topojson...');
+      dbgeo.parse(geom_data, {
+        geometryType: 'wkb',
+        geometryColumn: 'geom',
+        outputFormat: 'topojson',
+        precision: 6
+      }, (error, output) => {
+        if (error) {
+          console.log("data conversion failed");
+          console.log(error);
+          done();
+          return;
+        }
+        res.send(output);
+        console.log('Data sent!');
+      });
+    });
+  });
+});
+
+app.get('/slosh', (req, res) => {
+  console.log("Received layer request");
+  // Make slosh a :param (layer); log with ''Fetching features for' + req.params.layer'
+  pg.connect(process.env.PG_CON, (err, client, done) => {
+    if (err) {
+      console.log("database err: " + err);
+      done();
+      callback(new Error('Database connection error'));
+      return;
+    }
+    var query = client.query('SELECT * FROM gis_layers.storm_surge');
+    query.on('row', (row, result) => {
+      result.addRow(row);
+      console.log('Fetching features...');
+    });
+    query.on('end', result => {
+      var geom_data = result.rows;
+      console.log('Parsing into topojson...');
+      dbgeo.parse(geom_data, {
+        geometryType: 'wkb',
+        geometryColumn: 'geom',
+        outputFormat: 'topojson',
+        precision: 6
+      }, (error, output) => {
+        if (error) {
+          console.log("data conversion failed");
+          console.log(error);
+          done();
+          return;
+        }
+        res.send(output);
+        console.log('Data sent!');
+      });
     });
   });
 });
