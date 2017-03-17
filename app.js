@@ -57,7 +57,7 @@ app.post('/point/:type',
 
 app.post('/area/:settings',
   validate({
-    params: {settings: Joi.string().valid('age', 'set2')},
+    params: {settings: Joi.string().valid('age', 'hazard', 'storage', 'retention')},
     body: Joi.object().keys({
       coords: Joi.string()
     })
@@ -67,6 +67,12 @@ app.post('/area/:settings',
   var query_string;
   if (req.params.settings === 'age') {
     query_string = "SELECT * FROM gis_layers.parcels_matched WHERE ST_Within(geom, ST_MakePolygon(ST_GeomFromText('" + req.body.coords + "', 4326)));";
+  } else if (req.params.settings === 'hazard') {
+    query_string = "SELECT a.geom, b.fld_zone FROM (SELECT geom FROM gis_layers.parcels_matched WHERE ST_Within(geom, ST_MakePolygon(ST_GeomFromText('" + req.body.coords + "', 4326)))) a, gis_layers.flood_hazard_zones b WHERE ST_Within(ST_Centroid(a.geom), b.geom);";
+  } else if (req.params.settings === 'storage') {
+    query_string = "SELECT a.geom AS geom, ST_Value(b.rast, ST_Centroid(a.geom)) AS elev FROM gis_layers.buildings_sample a, gis_layers.broward_dem_north b WHERE ST_Within(a.geom, ST_MakePolygon(ST_GeomFromText('" + req.body.coords + "', 4326))) AND ST_Value(b.rast, ST_Centroid(a.geom)) >= 0;";
+  } else if (req.params.settings === 'retention') {
+    query_string = "SELECT (a.geomval).geom, (a.geomval).val FROM ( SELECT ST_DumpAsPolygons(rast) AS geomval FROM gis_layers.ground_surface ) a WHERE ST_Within((a.geomval).geom, ST_MakePolygon(ST_GeomFromText('" + req.body.coords + "', 4326)));";
   }
   pg.connect(process.env.PG_CON, (err, client, done) => {
     if (err) {
