@@ -16,8 +16,22 @@ const cors_options = {
 const app = express();
 const port = process.env.EX_PORT;
 
+const pool = new pg.Pool({
+  user: process.env.PG_USER,
+  database: process.env.PG_DATABASE,
+  password: process.env.PG_PASSWORD,
+  host: process.env.PG_HOST,
+  port: process.env.PG_PORT,
+  max: process.env.PG_MAX_CLIENTS,
+  idleTimeoutMillis: process.env.PG_IDLE_TIMEOUT
+});
+
 app.use(cors()); //TODO: use cors_options
 app.use(bodyParser.json());
+
+pool.on('error', (err, client) => {
+  console.log('Idle client error', err.message, err.stack);
+});
 
 app.post('/point/:type',
   validate({
@@ -33,7 +47,7 @@ app.post('/point/:type',
     if (req.params.type === 'section') {
       query_string = "";
     }
-    pg.connect(process.env.PG_CON, (err, client, done) => {
+    pool.connect((err, client, done) => {
       if (err) {
         console.log("database err: " + err);
         done();
@@ -69,7 +83,7 @@ app.post('/point/:type',
   } else if (req.params.type === 'elev') {
     query_string = "SELECT ST_Value(rast, ST_GeomFromText('" + wkt_point + "', 4326)) as elev FROM gis_layers.broward_dem_north WHERE ST_Value(rast, ST_GeomFromText('" + wkt_point + "', 4326)) >= 0";
   }
-  pg.connect(process.env.PG_CON, (err, client, done) => {
+  pool.connect((err, client, done) => {
     if (err) {
       console.log("database err: " + err);
       done();
@@ -104,7 +118,7 @@ app.post('/section/:type',
     } else if (req.params.type === 'linestring') {
       query_string = "CREATE OR REPLACE VIEW gis_layers.query_base AS SELECT ST_X(ST_Centroid(geom)) AS x_base, val AS z_base FROM gis_layers.base_watertable_dump WHERE ST_Intersects(ST_GeomFromText('LINESTRING(-80.46 " + req.body.lat + ", -80.075 " + req.body.lat + ")', 4326), geom); CREATE OR REPLACE VIEW gis_layers.query_future AS SELECT ST_X(ST_Centroid(geom)) AS x_future, val AS z_future FROM gis_layers.future_watertable_dump WHERE ST_Intersects(ST_GeomFromText('LINESTRING(-80.46 " + req.body.lat + ", -80.075 " + req.body.lat + ")', 4326), geom); CREATE OR REPLACE VIEW gis_layers.query_surface AS SELECT ST_X(ST_Centroid(geom)) AS x_surface, val AS z_surface FROM gis_layers.ground_surface_dump WHERE ST_Intersects(ST_GeomFromText('LINESTRING(-80.46 " + req.body.lat + ", -80.075 " + req.body.lat + ")', 4326), geom); CREATE OR REPLACE VIEW gis_layers.query_storagepotential AS SELECT a.x_base, a.z_base, b.x_future, b.z_future, c.x_surface, c.z_surface FROM gis_layers.query_base a, gis_layers.query_future b, gis_layers.query_surface c; SELECT * FROM gis_layers.query_storagepotential;";
     }*/
-    pg.connect(process.env.PG_CON, (err, client, done) => {
+    pool.connect((err, client, done) => {
       if (err) {
         console.log("database err: " + err);
         done();
@@ -158,7 +172,7 @@ validate({
   } else if (req.params.settings === 'elevation') {
     query_string = "SELECT (a.geomval).geom, (a.geomval).val FROM ( SELECT ST_DumpAsPolygons(rast) AS geomval FROM gis_layers.broward_dem ) a WHERE ST_Within((a.geomval).geom, ST_MakePolygon(ST_GeomFromText('" + req.body.coords + "', 4326)));";
   }
-  pg.connect(process.env.PG_CON, (err, client, done) => {
+  pool.connect((err, client, done) => {
     if (err) {
       console.log("database err: " + err);
       done();
@@ -203,7 +217,7 @@ app.post('/area2/:settings',
   if (req.params.settings === 'storage') {
     query_string = "SELECT a.geom AS geom_lot, b.geom AS geom_build, a.potential, a.elev FROM gis_layers.buildings_matched b, (SELECT a.geom, a.id, ST_Value(b.rast, 4, ST_Centroid(a.geom), true) AS potential, ST_Value(b.rast, 3, ST_Centroid(a.geom), true) AS elev FROM gis_layers.parcels_matched a, gis_layers.storage_potential_model b WHERE ST_Within(a.geom, ST_MakePolygon(ST_GeomFromText('" + req.body.coords + "', 4326)))) a WHERE b.parcel_id = a.id;";
   }
-  pg.connect(process.env.PG_CON, (err, client, done) => {
+  pool.connect((err, client, done) => {
     if (err) {
       console.log("database err: " + err);
       done();
@@ -262,7 +276,7 @@ app.post('/area2/:settings',
 app.get('/slosh', (req, res) => {
   console.log("Received layer request");
   // Make slosh a :param (layer); log with ''Fetching features for' + req.params.layer'
-  pg.connect(process.env.PG_CON, (err, client, done) => {
+  pool.connect((err, client, done) => {
     if (err) {
       console.log("database err: " + err);
       done();
