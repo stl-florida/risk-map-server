@@ -273,7 +273,7 @@ app.post('/area2/:settings',
   });
 });
 
-app.get('/slosh', (req, res) => {
+app.get('/sewer', (req, res) => {
   console.log("Received layer request");
   // Make slosh a :param (layer); log with ''Fetching features for' + req.params.layer'
   pool.connect((err, client, done) => {
@@ -283,7 +283,7 @@ app.get('/slosh', (req, res) => {
       callback(new Error('Database connection error'));
       return;
     }
-    var query = client.query('SELECT * FROM gis_layers.storm_surge');
+    var query = client.query('SELECT * FROM gis_layers.sewer_mains');
     query.on('row', (row, result) => {
       result.addRow(row);
       console.log('Fetching features...');
